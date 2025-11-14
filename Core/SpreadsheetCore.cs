@@ -42,7 +42,7 @@ namespace myexcel.Core
                 return; 
 
             _cells[row][col].Expression = expression;
-            RecalculateAll(); // Запускаємо повний перерахунок
+            RecalculateAll();
         }
 
         public string GetCellDisplayValue(int row, int col)
@@ -52,7 +52,6 @@ namespace myexcel.Core
             return _cells[row][col].Value?.ToString() ?? string.Empty;
         }
 
-        // Обробка помилок обчислення
         public void RecalculateAll()
         {
             for (int r = 0; r < RowCount; r++)
@@ -72,7 +71,6 @@ namespace myexcel.Core
                     }
                     else
                     {
-                        // Перехоплюємо будь-які помилки (синтаксис, ділення на 0, цикли)
                         try
                         {
                             _evaluationChain.Clear(); 
@@ -92,14 +90,12 @@ namespace myexcel.Core
             var cell = _cells[row][col];
             string cellName = GetCellName(row, col);
 
-            // 1. Перевірка на циркулярне посилання
             if (_evaluationChain.Contains(cellName))
             {
                 throw new InvalidOperationException($"Циркулярне посилання на {cellName}");
             }
             _evaluationChain.Add(cellName);
 
-            // 2. Якщо це не формула, повертаємо значення
             if (!cell.Expression.Trim().StartsWith("="))
             {
                 _evaluationChain.Remove(cellName);
@@ -110,7 +106,6 @@ namespace myexcel.Core
                 throw new InvalidOperationException($"Клітинка {cellName} не є числом.");
             }
 
-            // 3. Це формула, обчислюємо
             string expression = cell.Expression.Trim().Substring(1); 
             double result = _evaluator.Evaluate(expression);
             
@@ -127,17 +122,14 @@ namespace myexcel.Core
                 {
                     throw new IndexOutOfRangeException($"Посилання {cellName} виходить за межі таблиці.");
                 }
-                // Рекурсивний виклик для обчислення залежностей
                 return EvaluateCell(row, col);
             }
             catch (Exception ex)
             {
-                // "Прокидаємо" помилку нагору
                 throw new InvalidOperationException($"Помилка у посиланні {cellName}. {ex.Message}", ex);
             }
         }
 
-        // --- Керування сіткою (Логіка) ---
         public void AddRow()
         {
             var newRow = new List<Cell>();
@@ -151,7 +143,10 @@ namespace myexcel.Core
 
         public void DeleteRow()
         {
-            if (RowCount > 1) _cells.RemoveAt(RowCount - 1);
+            if (RowCount > 0) 
+            {
+                _cells.RemoveAt(RowCount - 1);
+            }
         }
 
         public void AddColumn()
@@ -161,32 +156,29 @@ namespace myexcel.Core
 
         public void DeleteColumn()
         {
-            if (ColumnCount > 1)
+            if (ColumnCount > 0)
             {
-                foreach (var row in _cells) row.RemoveAt(ColumnCount - 1);
+                foreach (var row in _cells) 
+                {
+                    if(row.Count > 0) // Додаткова перевірка
+                        row.RemoveAt(row.Count - 1);
+                }
             }
         }
         
-        // --- Збереження / Завантаження (Логіка) ---
-        public async Task SaveToFile(string filePath)
+        public async Task SaveToStreamAsync(Stream stream)
         {
             try
             {
-                // 1. Створюємо "чисту" структуру лише з виразами
                 var dataToSave = _cells.Select(row => 
                     row.Select(cell => cell.Expression).ToList()
                 ).ToList();
 
-                // 2. Серілізуємо в JSON-рядок
-                string json = JsonSerializer.Serialize(dataToSave, new JsonSerializerOptions { WriteIndented = true });
-
-                // 3. Зберігаємо у файл
-                await File.WriteAllTextAsync(filePath, json);
+                await JsonSerializer.SerializeAsync(stream, dataToSave, new JsonSerializerOptions { WriteIndented = true });
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Кидаємо помилку, щоб UI міг її зловити
-                throw new IOException("Не вдалося зберегти файл. Перевірте доступи.");
+                throw new IOException($"Помилка серіалізації даних: {ex.Message}", ex);
             }
         }
 
@@ -197,16 +189,12 @@ namespace myexcel.Core
 
             try
             {
-                // 1. Читаємо JSON з файлу
                 string json = await File.ReadAllTextAsync(filePath);
-
-                // 2. Десеріалізуємо у нашу структуру
                 var loadedData = JsonSerializer.Deserialize<List<List<string>>>(json);
 
                 _cells.Clear(); 
                 if (loadedData != null)
                 {
-                    // 3. Відновлюємо клітинки з завантажених даних
                     foreach (var rowData in loadedData)
                     {
                         var newRow = new List<Cell>();
@@ -217,17 +205,14 @@ namespace myexcel.Core
                         _cells.Add(newRow);
                     }
                 }
-                // 4. Перераховуємо всю таблицю, щоб заповнити `.Value`
                 RecalculateAll();
             }
             catch(Exception ex) 
             { 
-                // Кидаємо помилку, щоб UI міг її зловити
                 throw new JsonException($"Файл пошкоджений або має невірний формат. {ex.Message}");
             }
         }
-
-        // --- Допоміжні методи ---
+        
         private string GetCellName(int row, int col)
         {
             return $"{GetColumnName(col + 1)}{row + 1}";
@@ -248,7 +233,6 @@ namespace myexcel.Core
 
         private (int row, int col) ParseCellName(string cellName)
         {
-            // Використовуємо Regex для надійного парсингу "A1", "BC23" і т.д.
             var match = Regex.Match(cellName.ToUpper(), @"^([A-Z]+)(\d+)$");
             if (!match.Success)
             {
@@ -256,7 +240,7 @@ namespace myexcel.Core
             }
 
             string colName = match.Groups[1].Value;
-            int row = int.Parse(match.Groups[2].Value) - 1; // "1" -> 0
+            int row = int.Parse(match.Groups[2].Value) - 1; 
 
             int col = 0;
             int pow = 1;
@@ -265,7 +249,7 @@ namespace myexcel.Core
                 col += (colName[i] - 'A' + 1) * pow;
                 pow *= 26;
             }
-            col--; // 'A' = 0, 'B' = 1...
+            col--; 
 
             return (row, col);
         }

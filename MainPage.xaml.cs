@@ -1,62 +1,52 @@
-﻿using myexcel.Core; // Використовуємо правильний namespace
+﻿using Microsoft.Maui.Controls;
+using System;
+using System.Linq;
+using System.IO; 
+using myexcel.Core; // Використовуємо правильний namespace
+using CommunityToolkit.Maui.Storage; // Для FileSaver
+using System.Threading; // Для CancellationToken
 
 namespace myexcel
 {
     public partial class MainPage : ContentPage
     {
-        // Початкові розміри з PDF. Використовуються ЛИШЕ для ініціалізації Core.
         const int InitialCountColumn = 20;
-        const int InitialCountRow = 50;
+        const int InitialCountRow = 20;
 
         private readonly SpreadsheetCore _core;
 
         public MainPage()
         {
             InitializeComponent();
-            
-            // Ініціалізуємо Ядро
-            _core = new SpreadsheetCore(InitialCountRow, InitialCountColumn);
-            
-            // Будуємо UI на основі даних з Ядра
+            _core = new SpreadsheetCore(InitialCountRow, InitialCountRow);
             RebuildGridUI();
         }
-
-        // --- Керування UI ---
-
-        // Повна перебудова UI
-        // Викликається 1 раз на старті та після завантаження файлу (Load)
+        
         private void RebuildGridUI()
         {
-            // Повністю очищуємо все
             grid.Children.Clear();
             grid.RowDefinitions.Clear();
             grid.ColumnDefinitions.Clear();
 
-            // === ГОЛОВНЕ ВИПРАВЛЕННЯ: ===
-            // Додаємо визначення для нульового рядка (A, B, C...)
             grid.RowDefinitions.Add(new RowDefinition());
-            // =============================
-            
-            // Додаємо визначення для нульового стовпця (1, 2, 3...)
+
             grid.ColumnDefinitions.Add(new ColumnDefinition());
 
-            // Створення стовпців UI (A, B, C...)
             for (int col = 0; col < _core.ColumnCount; col++)
             {
                 grid.ColumnDefinitions.Add(new ColumnDefinition());
                 
                 var label = new Label
                 {
-                    Text = GetColumnName(col + 1), // col+1, бо індекси з 1
+                    Text = GetColumnName(col + 1), // col+1
                     VerticalOptions = LayoutOptions.Center,
                     HorizontalOptions = LayoutOptions.Center
                 };
-                Grid.SetRow(label, 0); // Ставимо у 0-й рядок (тепер він існує)
-                Grid.SetColumn(label, col + 1); // col+1, бо 0-й стовпець - заголовки
+                Grid.SetRow(label, 0); 
+                Grid.SetColumn(label, col + 1); 
                 grid.Children.Add(label);
             }
 
-            // Створення рядків UI (1, 2, 3...)
             for (int row = 0; row < _core.RowCount; row++)
             {
                 grid.RowDefinitions.Add(new RowDefinition());
@@ -66,11 +56,10 @@ namespace myexcel
                     VerticalOptions = LayoutOptions.Center,
                     HorizontalOptions = LayoutOptions.Center
                 };
-                Grid.SetRow(label, row + 1); // row+1, бо 0-й рядок - заголовки
+                Grid.SetRow(label, row + 1); 
                 Grid.SetColumn(label, 0);
                 grid.Children.Add(label);
-
-                // Створення комірок (Entry)
+                
                 for (int col = 0; col < _core.ColumnCount; col++)
                 {
                     var entry = new Entry
@@ -86,9 +75,7 @@ namespace myexcel
                 }
             }
         }
-
-        // Легке оновлення значень
-        // Викликається, коли змінюються лише дані (після Calculate або Entry_Unfocused)
+        
         private void RefreshGridDisplayValues()
         {
             foreach (var child in grid.Children)
@@ -100,16 +87,12 @@ namespace myexcel
                     
                     if (row >= 0 && col >= 0 && row < _core.RowCount && col < _core.ColumnCount)
                     {
-                        // Оновлюємо текст Entry згідно даних в Core
                         entry.Text = _core.GetCellDisplayValue(row, col);
                     }
                 }
             }
         }
-
-        // --- ОБРОБНИКИ ПОДІЙ ---
-
-        // Виправлено для CS8622 (nullable warning)
+        
         private void Entry_Unfocused(object? sender, FocusEventArgs e)
         {
             var entry = sender as Entry;
@@ -118,40 +101,27 @@ namespace myexcel
             int row = Grid.GetRow(entry) - 1;
             int col = Grid.GetColumn(entry) - 1;
             
-            if (row < 0 || col < 0) return; // Це не клітинка сітки (можливо textInput)
+            if (row < 0 || col < 0) return;
 
-            // 1. UI передає команду Ядру
             _core.UpdateCell(row, col, entry.Text);
+            RefreshGridDisplayValues();
         }
-
-        // --- ОПТИМІЗОВАНІ МЕТОДИ ДОДАВАННЯ/ВИДАЛЕННЯ ---
-
+        
         private void AddRowButton_Clicked(object? sender, EventArgs e)
         {
             _core.AddRow();
-            
             int newUiRowIndex = _core.RowCount; 
             
             grid.RowDefinitions.Add(new RowDefinition());
 
-            var label = new Label
-            {
-                Text = newUiRowIndex.ToString(),
-                VerticalOptions = LayoutOptions.Center,
-                HorizontalOptions = LayoutOptions.Center
-            };
+            var label = new Label { Text = newUiRowIndex.ToString(), VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center };
             Grid.SetRow(label, newUiRowIndex);
             Grid.SetColumn(label, 0);
             grid.Children.Add(label);
 
             for (int col = 0; col < _core.ColumnCount; col++)
             {
-                var entry = new Entry
-                {
-                    Text = "", 
-                    VerticalOptions = LayoutOptions.Center,
-                    HorizontalOptions = LayoutOptions.Center
-                };
+                var entry = new Entry { Text = "", VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center };
                 entry.Unfocused += Entry_Unfocused;
                 Grid.SetRow(entry, newUiRowIndex);
                 Grid.SetColumn(entry, col + 1); 
@@ -161,15 +131,11 @@ namespace myexcel
 
         private void DeleteRowButton_Clicked(object? sender, EventArgs e)
         {
-            // 1. ПЕРЕВІРЯЄМО СТАН ЯДРА. Чи є взагалі дані для видалення?
             if (_core.RowCount <= 0)
                 return;
 
-            // 2. Отримуємо індекс ОСТАННЬОГО РЯДКА в UI.
-            //    (Оскільки UI має рядок заголовка, індекс = _core.RowCount)
             int lastUiRowIndex = _core.RowCount; 
             
-            // 3. Видаляємо всі UI-елементи з цього рядка
             var childrenToRemove = grid.Children
                 .Where(c => grid.GetRow(c) == lastUiRowIndex)
                 .ToList();
@@ -179,56 +145,38 @@ namespace myexcel
                 grid.Children.Remove(child);
             }
 
-            // 4. Видаляємо саме визначення рядка з UI
             grid.RowDefinitions.RemoveAt(lastUiRowIndex);
-
-            // 5. ТЕПЕР кажемо ядру видалити свої дані
             _core.DeleteRow(); 
         }
 
         private void AddColumnButton_Clicked(object? sender, EventArgs e)
         {
             _core.AddColumn();
-
             int newUiColIndex = _core.ColumnCount; 
 
             grid.ColumnDefinitions.Add(new ColumnDefinition());
 
-            var label = new Label
-            {
-                Text = GetColumnName(newUiColIndex),
-                VerticalOptions = LayoutOptions.Center,
-                HorizontalOptions = LayoutOptions.Center
-            };
+            var label = new Label { Text = GetColumnName(newUiColIndex), VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center };
             Grid.SetRow(label, 0);
             Grid.SetColumn(label, newUiColIndex);
             grid.Children.Add(label);
 
             for (int row = 0; row < _core.RowCount; row++)
             {
-                var entry = new Entry
-                {
-                    Text = "",
-                    VerticalOptions = LayoutOptions.Center,
-                    HorizontalOptions = LayoutOptions.Center
-                };
+                var entry = new Entry { Text = "", VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center };
                 entry.Unfocused += Entry_Unfocused;
                 Grid.SetRow(entry, row + 1);
                 Grid.SetColumn(entry, newUiColIndex);
                 grid.Children.Add(entry);
             }
         }
-
         private void DeleteColumnButton_Clicked(object? sender, EventArgs e)
         {
-            // 1. ПЕРЕВІРЯЄМО СТАН ЯДРА.
             if (_core.ColumnCount <= 0)
                 return;
 
-            // 2. Отримуємо індекс ОСТАННЬОГО СТОВПЦЯ в UI
             int lastUiColIndex = _core.ColumnCount;
 
-            // 3. Видаляємо всі UI-елементи з цього стовпця
             var childrenToRemove = grid.Children
                 .Where(c => grid.GetColumn(c) == lastUiColIndex)
                 .ToList();
@@ -238,10 +186,7 @@ namespace myexcel
                 grid.Children.Remove(child);
             }
 
-            // 4. Видаляємо саме визначення стовпця з UI
             grid.ColumnDefinitions.RemoveAt(lastUiColIndex);
-
-            // 5. ТЕПЕР кажемо ядру видалити свої дані
             _core.DeleteColumn();
         }
 
@@ -249,23 +194,43 @@ namespace myexcel
 
         private async void SaveButton_Clicked(object? sender, EventArgs e)
         {
-            string fileName = "mysheet.json";
-            // Зберігаємо у безпечну папку, спільну для додатку
-            string path = Path.Combine(FileSystem.AppDataDirectory, fileName);
+            CancellationToken cancellationToken = CancellationToken.None;
 
             try
             {
-                await _core.SaveToFile(path);
+                // 1. Створюємо потік у пам'яті
+                using var stream = new MemoryStream();
                 
-                await DisplayAlert("Збережено", 
-                    $"Файл успішно збережено у:\n{path}", 
-                    "OK");
+                // 2. Просимо "мозок" записати свої дані в цей потік
+                await _core.SaveToStreamAsync(stream);
+                
+                // 3. "Відмотуємо" потік на початок
+                stream.Seek(0, SeekOrigin.Begin);
+
+                // 4. Викликаємо діалог "Зберегти як..."
+                var saveResult = await FileSaver.Default.SaveAsync(
+                    "mysheet.json", // Назва файлу за замовчуванням
+                    stream,         // Потік з даними
+                    cancellationToken
+                );
+
+                if (saveResult.IsSuccessful)
+                {
+                    await DisplayAlert("Збережено", 
+                        $"Файл успішно збережено за шляхом:\n{saveResult.FilePath}", 
+                        "OK");
+                }
+                else
+                {
+                    await DisplayAlert("Скасовано", 
+                        $"Не вдалося зберегти файл: {saveResult.Exception?.Message}", 
+                        "OK");
+                }
             }
             catch (Exception ex)
             {
-                // Показуємо помилку, якщо Core її "кинув"
                 await DisplayAlert("Помилка збереження", 
-                    $"Не вдалося зберегти файл: {ex.Message}", 
+                    $"Виникла помилка: {ex.Message}", 
                     "OK");
             }
         }
@@ -274,7 +239,6 @@ namespace myexcel
         {
             try
             {
-                // Налаштування фільтру для .json файлів
                 var fileTypes = new FilePickerFileType(
                     new Dictionary<DevicePlatform, IEnumerable<string>>
                     {
@@ -290,16 +254,12 @@ namespace myexcel
                     FileTypes = fileTypes,
                 };
                 
-                // 1. Відкриваємо системний діалог вибору файлу
                 var result = await FilePicker.PickAsync(options);
 
                 if (result != null)
                 {
-                    // 2. Ядро завантажує дані
                     await _core.LoadFromFile(result.FullPath);
-                    
-                    // 3. Потрібна повна перебудова UI,
-                    //    оскільки розміри таблиці могли змінитися
+                    // Потрібна повна перебудова UI
                     RebuildGridUI();
                     
                     await DisplayAlert("Завантажено", "Таблицю успішно завантажено.", "OK");
@@ -307,7 +267,6 @@ namespace myexcel
             }
             catch (Exception ex)
             {
-                // Показуємо помилку, якщо Core її "кинув"
                 await DisplayAlert("Помилка завантаження", 
                     $"Не вдалося завантажити або обробити файл: {ex.Message}", 
                     "OK");
@@ -334,7 +293,8 @@ namespace myexcel
         private async void HelpButton_Clicked(object? sender, EventArgs e)
         {
             await DisplayAlert("Довідка", 
-                "Лабораторна робота 1.Cаплюкова Юрія", 
+                "Лабораторна робота 1. Варіант 8.\n" + 
+                "Підтримувані операції: +, -, *, /, ^, inc, dec, mod, div, mmin, mmax", 
                 "OK");
         }
 

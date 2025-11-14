@@ -2,7 +2,6 @@
 using System.Globalization;
 using System.Linq;
 
-// Переконайтеся, що namespace правильний (myexcel або MyExcelMAUIApp)
 namespace myexcel.Core.Parsing 
 {
     public class LabCalculatorVisitor : LabCalculatorBaseVisitor<double>
