@@ -84,7 +84,7 @@ namespace myexcel
                 {
                     int row = Grid.GetRow(entry) - 1;
                     int col = Grid.GetColumn(entry) - 1;
-                    
+
                     if (row >= 0 && col >= 0 && row < _core.RowCount && col < _core.ColumnCount)
                     {
                         entry.Text = _core.GetCellDisplayValue(row, col);
@@ -104,7 +104,6 @@ namespace myexcel
             if (row < 0 || col < 0) return;
 
             _core.UpdateCell(row, col, entry.Text);
-            RefreshGridDisplayValues();
         }
         
         private void AddRowButton_Clicked(object? sender, EventArgs e)
@@ -189,8 +188,7 @@ namespace myexcel
             grid.ColumnDefinitions.RemoveAt(lastUiColIndex);
             _core.DeleteColumn();
         }
-
-        // --- РЕАЛІЗОВАНІ ЗБЕРЕЖЕННЯ / ЗАВАНТАЖЕННЯ ---
+        
 
         private async void SaveButton_Clicked(object? sender, EventArgs e)
         {
@@ -198,19 +196,15 @@ namespace myexcel
 
             try
             {
-                // 1. Створюємо потік у пам'яті
                 using var stream = new MemoryStream();
                 
-                // 2. Просимо "мозок" записати свої дані в цей потік
                 await _core.SaveToStreamAsync(stream);
                 
-                // 3. "Відмотуємо" потік на початок
                 stream.Seek(0, SeekOrigin.Begin);
 
-                // 4. Викликаємо діалог "Зберегти як..."
                 var saveResult = await FileSaver.Default.SaveAsync(
-                    "mysheet.json", // Назва файлу за замовчуванням
-                    stream,         // Потік з даними
+                    "mysheet.json",
+                    stream,         
                     cancellationToken
                 );
 
@@ -273,8 +267,6 @@ namespace myexcel
             }
         }
 
-        // --- ІНШІ ОБРОБНИКИ ---
-
         private void CalculateButton_Clicked(object? sender, EventArgs e)
         {
             _core.RecalculateAll();
@@ -297,8 +289,14 @@ namespace myexcel
                 "Підтримувані операції: +, -, *, /, ^, inc, dec, mod, div, mmin, mmax", 
                 "OK");
         }
+        
+        private void ToggleViewButton_Clicked(object? sender, EventArgs e)
+        {
+            _core.ToggleFormulaMode();
 
-        // Допоміжний метод з PDF
+            RefreshGridDisplayValues();
+        }
+
         private string GetColumnName(int colIndex)
         {
             int dividend = colIndex;

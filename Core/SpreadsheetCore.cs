@@ -11,6 +11,7 @@ namespace myexcel.Core
         private readonly ExpressionEvaluator _evaluator;
         private HashSet<string> _evaluationChain; 
         private int _initialCols;
+        public bool IsFormulaMode { get; private set; } = false;
 
         public int RowCount => _cells.Count;
         public int ColumnCount => RowCount > 0 ? _cells[0].Count : 0;
@@ -49,7 +50,15 @@ namespace myexcel.Core
         {
             if (row < 0 || row >= RowCount || col < 0 || col >= ColumnCount)
                 return string.Empty;
-            return _cells[row][col].Value?.ToString() ?? string.Empty;
+            
+            if (IsFormulaMode)
+            {
+                return _cells[row][col].Expression;
+            }
+            else
+            {
+                return _cells[row][col].Value?.ToString() ?? string.Empty;
+            }
         }
 
         public void RecalculateAll()
@@ -252,6 +261,10 @@ namespace myexcel.Core
             col--; 
 
             return (row, col);
+        }
+        public void ToggleFormulaMode()
+        {
+            IsFormulaMode = !IsFormulaMode;
         }
     }
 }

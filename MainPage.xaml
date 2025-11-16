@@ -21,6 +21,7 @@
             <Button Text="Вийти" Clicked="ExitButton_Clicked" />
             <Button Text="Порахувати" Clicked="CalculateButton_Clicked" />
             <Button Text="Довідка" Clicked="HelpButton_Clicked" />
+            <Button Text="Формули/Значення" Clicked="ToggleViewButton_Clicked" />
             <Button Text="Видалити рядок" Clicked="DeleteRowButton_Clicked" />
             <Button Text="Видалити стовпчик" Clicked="DeleteColumnButton_Clicked" />
             <Button Text="Додати рядок" Clicked="AddRowButton_Clicked" />
